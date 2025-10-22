@@ -1,22 +1,18 @@
 from flask import Flask, request, jsonify
+from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 from PIL import Image
 import torch
 import io
-import cv2
-import numpy as np
 
 app = Flask(__name__)
 
-# Load YOLOv5 model for food detection (or any other food detection model)
-print("Loading YOLOv5 model for food detection...")
-model = torch.hub.load("ultralytics/yolov5", "yolov5s")  # Using the small model for faster processing
-print("Model loaded successfully ✅")
+MODEL_ID = "nateraw/food-classifier"
 
-# List of food classes (from YOLOv5 model)
-food_classes = [
-    "apple", "banana", "orange", "grape", "carrot", "broccoli", "pizza", "sandwich", "cake", "hot dog", "donut", "burger", 
-    "fries", "cup", "bottle", "egg", "cheese", "chicken", "steak", "fish", "pasta", "sushi", "soup"
-]
+print("Loading food recognition model... 🍔")
+extractor = AutoFeatureExtractor.from_pretrained(MODEL_ID)
+model = AutoModelForImageClassification.from_pretrained(MODEL_ID)
+model.eval()
+print("Model loaded successfully ✅")
 
 @app.route("/")
 def home():
@@ -32,32 +28,25 @@ def analyze_image():
 
     image_file = request.files["image"]
     image = Image.open(io.BytesIO(image_file.read())).convert("RGB")
-    
-    # Convert image to a numpy array for processing by YOLOv5
-    img = np.array(image)
 
-    # Perform inference with YOLOv5 to detect objects
-    results = model(img)
+    # Preprocess
+    inputs = extractor(images=image, return_tensors="pt")
 
-    # Parse results for food detection
-    detected_foods = []
-    for idx, (label, confidence) in enumerate(zip(results.names, results.xywh[0][:, -2])):
-        # If the label is a food item and confidence is greater than a threshold (e.g., 0.5)
-        if results.names[int(label)] in food_classes and confidence > 0.5:
-            detected_foods.append(results.names[int(label)])
+    # Inference
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits = outputs.logits
+        predicted_class_idx = logits.argmax(-1).item()
 
-    # If no food is detected, return a generic suggestion
-    has_food = len(detected_foods) > 0
+    label = model.config.id2label[predicted_class_idx]
+    confidence = torch.nn.functional.softmax(logits, dim=-1)[0][predicted_class_idx].item()
 
-    suggestion = (
-        "🍽️ Eat something light and nutritious to keep focus while studying!"
-        if has_food else
-        "🚫 No recognizable food detected — maybe your fridge is empty?"
-    )
+    suggestion = f"🍽️ Looks like {label.lower()}! Perfect for a meal idea 😋" if confidence > 0.3 else \
+                 "🤔 Not sure what food that is — maybe try another photo?"
 
     return jsonify({
-        "detected_foods": detected_foods,
-        "has_food": has_food,
+        "label": label,
+        "confidence": round(confidence, 3),
         "suggestion": suggestion
     })
 
