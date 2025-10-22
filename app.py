@@ -1,23 +1,22 @@
-# app.py
-from transformers import AutoProcessor, AutoModelForCausalLM
 from flask import Flask, request, jsonify
 from PIL import Image
 import torch
 import io
+import cv2
+import numpy as np
 
 app = Flask(__name__)
 
-# Load model and processor
-MODEL_ID = "microsoft/Florence-2-base"
-
-print("Loading Florence-2 model... (this may take a minute)")
-processor = AutoProcessor.from_pretrained(MODEL_ID)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID,
-    torch_dtype=torch.float16,
-    device_map="auto"
-)
+# Load YOLOv5 model for food detection (or any other food detection model)
+print("Loading YOLOv5 model for food detection...")
+model = torch.hub.load("ultralytics/yolov5", "yolov5s")  # Using the small model for faster processing
 print("Model loaded successfully ✅")
+
+# List of food classes (from YOLOv5 model)
+food_classes = [
+    "apple", "banana", "orange", "grape", "carrot", "broccoli", "pizza", "sandwich", "cake", "hot dog", "donut", "burger", 
+    "fries", "cup", "bottle", "egg", "cheese", "chicken", "steak", "fish", "pasta", "sushi", "soup"
+]
 
 @app.route("/")
 def home():
@@ -33,17 +32,22 @@ def analyze_image():
 
     image_file = request.files["image"]
     image = Image.open(io.BytesIO(image_file.read())).convert("RGB")
+    
+    # Convert image to a numpy array for processing by YOLOv5
+    img = np.array(image)
 
-    # Florence prompt for captioning
-    prompt = "<DETAILED_CAPTION>"
+    # Perform inference with YOLOv5 to detect objects
+    results = model(img)
 
-    inputs = processor(images=image, text=prompt, return_tensors="pt").to(model.device)
-    generated_ids = model.generate(**inputs, max_new_tokens=256)
-    caption = processor.decode(generated_ids[0], skip_special_tokens=True)
+    # Parse results for food detection
+    detected_foods = []
+    for idx, (label, confidence) in enumerate(zip(results.names, results.xywh[0][:, -2])):
+        # If the label is a food item and confidence is greater than a threshold (e.g., 0.5)
+        if results.names[int(label)] in food_classes and confidence > 0.5:
+            detected_foods.append(results.names[int(label)])
 
-    # Simple heuristic: detect if there’s food
-    food_keywords = ["food", "fruit", "vegetable", "meat", "bottle", "egg", "bread", "milk", "cheese", "plate", "dish"]
-    has_food = any(word in caption.lower() for word in food_keywords)
+    # If no food is detected, return a generic suggestion
+    has_food = len(detected_foods) > 0
 
     suggestion = (
         "🍽️ Eat something light and nutritious to keep focus while studying!"
@@ -52,7 +56,7 @@ def analyze_image():
     )
 
     return jsonify({
-        "description": caption,
+        "detected_foods": detected_foods,
         "has_food": has_food,
         "suggestion": suggestion
     })
