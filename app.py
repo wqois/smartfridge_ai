@@ -14,12 +14,16 @@ HF_TOKEN = os.environ.get("HF_TOKEN")  # Optional token for stability
 # HELPER FUNCTION TO CALL HUGGING FACE MODEL
 # ------------------------------------------------------
 def analyze_image(image_bytes):
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "image/jpeg"  # model expects raw image
+    } if HF_TOKEN else {"Content-Type": "image/jpeg"}
+
     try:
         response = requests.post(
             MODEL_URL,
             headers=headers,
-            files={"file": image_bytes},
+            data=image_bytes,   # ✅ send raw bytes, not files=
             timeout=60
         )
         if response.status_code != 200:
