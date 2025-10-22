@@ -1,49 +1,77 @@
 body {
   margin: 0;
   height: 100vh;
-  background: linear-gradient(135deg, #0b0e14, #202637);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif;
-  color: #e5e9f0;
+  background: linear-gradient(135deg, #0b0e14, #1d2230);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif;
+  color: #e6ecf9;
 }
 
 .container {
   width: 90%;
   max-width: 420px;
-  padding: 25px;
   text-align: center;
-  border-radius: 20px;
   background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid rgba(255,255,255,0.15);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  border-radius: 24px;
+  padding: 30px 25px;
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #aab3c2;
+  margin-bottom: 25px;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
 
 .glass-btn {
   background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 10px 18px;
-  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,0.25);
   color: #fff;
+  padding: 10px 18px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, transform 0.15s;
 }
+
 .glass-btn:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.18);
+  transform: translateY(-1px);
 }
 
-.subtitle {
-  color: #aab3c2;
-  margin-bottom: 20px;
+.primary {
+  background: rgba(100,150,255,0.15);
+  border: 1px solid rgba(100,150,255,0.3);
+  margin-top: 10px;
 }
 
-#imageInput {
-  display: block;
-  margin: 12px auto;
+.upload-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#preview-area img {
+  margin-top: 15px;
+  max-width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.hidden {
+  display: none;
 }
 
 .results {
@@ -51,5 +79,3 @@ body {
   margin-top: 20px;
   font-size: 0.9rem;
 }
-
-.hidden { display: none; }
