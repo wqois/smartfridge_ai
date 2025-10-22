@@ -1,90 +1,85 @@
-import os
 import requests
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-LOGMEAL_TYPE_URL = "https://api.logmeal.com/image/recognition/type/v0.0"
-LOGMEAL_DETECT_URL = "https://api.logmeal.com/v2/recognition/dish"
-API_KEY = os.environ.get("LOGMEAL_KEY")
+# Free open Hugging Face vision model (Microsoft Florence-2)
+MODEL_URL = "https://api-inference.huggingface.co/models/microsoft/Florence-2-large"
 
-def detect_food_type(image_bytes):
-    headers = {
-        "Content-Type": "image/jpeg",
-        "Authorization": f"Bearer {API_KEY}"
-    }
-    resp = requests.post(LOGMEAL_TYPE_URL, headers=headers, data=image_bytes)
-    if resp.status_code != 200:
-        return None, f"Food type API error {resp.status_code}: {resp.text}"
-    return resp.json(), None
+def analyze_image(image_bytes):
+    headers = {"Content-Type": "image/jpeg"}
+    try:
+        r = requests.post(MODEL_URL, headers=headers, data=image_bytes, timeout=60)
+        if r.status_code != 200:
+            return None, f"Model error {r.status_code}: {r.text}"
+        return r.json(), None
+    except Exception as e:
+        return None, str(e)
 
+def is_food_object(label):
+    food_keywords = [
+        "food","fruit","apple","banana","orange","bread","burger","pizza","sandwich",
+        "salad","egg","milk","yogurt","chicken","fish","meat","steak","rice","noodle",
+        "cake","ice cream","cookie","vegetable","tomato","potato","onion","carrot"
+    ]
+    l = label.lower()
+    return any(word in l for word in food_keywords)
 
-def detect_food_items(image_bytes):
-    headers = {
-        "Content-Type": "image/jpeg",
-        "Authorization": f"Bearer {API_KEY}"
-    }
-    resp = requests.post(LOGMEAL_DETECT_URL, headers=headers, data=image_bytes)
-    if resp.status_code != 200:
-        return None, f"Food detect API error {resp.status_code}: {resp.text}"
-    return resp.json(), None
-
+def get_recommendation(food_list):
+    recs = []
+    for f in food_list:
+        fl = f.lower()
+        if any(x in fl for x in ["banana","berries","apple","fish","egg","nuts","milk","yogurt"]):
+            recs.append(f"✅ {f}: Great for focus and memory.")
+        elif any(x in fl for x in ["pizza","burger","cake","ice cream","fries","soda"]):
+            recs.append(f"⚠️ {f}: Not ideal for studying.")
+        else:
+            recs.append(f"ℹ️ {f}: Neutral for studying.")
+    return recs
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
 @app.route("/analyze", methods=["POST"])
 def analyze():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
+    image_bytes = request.files["image"].read()
 
-    image_file = request.files["image"]
-    image_bytes = image_file.read()
-
-    # Step 1: detect whether there is food
-    type_data, err = detect_food_type(image_bytes)
+    data, err = analyze_image(image_bytes)
     if err:
         return jsonify({"error": err}), 500
 
-    if type_data.get("type") == "non_food":
+    # Florence-2 may return either a list of dicts or one dict
+    labels = []
+    if isinstance(data, list):
+        for d in data:
+            if isinstance(d, dict) and "label" in d:
+                labels.append(d["label"])
+    elif isinstance(data, dict):
+        # sometimes returns {"generated_text": "...", "objects": [{"label": "apple"}]}
+        if "objects" in data:
+            labels = [obj.get("label", "") for obj in data["objects"]]
+        elif "generated_text" in data:
+            labels = [data["generated_text"]]
+
+    # Extract foods
+    foods = [l for l in labels if is_food_object(l)]
+
+    if not foods:
         return jsonify({
-            "message": "No food detected in image.",
-            "predictions": [],
+            "message": "No food detected.",
+            "predictions": labels,
             "recommendations": []
         })
 
-    # Step 2: identify food items
-    detect_data, err2 = detect_food_items(image_bytes)
-    if err2:
-        return jsonify({"error": err2}), 500
-
-    items = []
-    for d in detect_data.get("recognition_results", []):
-        if "name" in d:
-            items.append(d["name"])
-
-    if not items:
-        return jsonify({"message": "No recognizable food found."})
-
-    # Step 3: recommendations for study performance
-    recs = []
-    for food in items:
-        f = food.lower()
-        if any(x in f for x in ["banana", "apple", "berries", "nuts", "egg", "fish", "salmon", "milk", "yogurt"]):
-            recs.append(f"✅ {food}: Great for brain energy and memory.")
-        elif any(x in f for x in ["pizza", "burger", "soda", "fries", "cake", "ice cream"]):
-            recs.append(f"⚠️ {food}: Not ideal for studying, may reduce focus.")
-        else:
-            recs.append(f"ℹ️ {food}: Neutral effect on studying.")
-
+    recs = get_recommendation(foods)
     return jsonify({
         "message": "Food detected successfully!",
-        "predictions": items,
+        "predictions": foods,
         "recommendations": recs
     })
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
