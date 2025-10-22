@@ -1,0 +1,55 @@
+body {
+  margin: 0;
+  height: 100vh;
+  background: linear-gradient(135deg, #0b0e14, #202637);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif;
+  color: #e5e9f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  width: 90%;
+  max-width: 420px;
+  padding: 25px;
+  text-align: center;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.glass-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 10px 18px;
+  margin-top: 12px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.glass-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.subtitle {
+  color: #aab3c2;
+  margin-bottom: 20px;
+}
+
+#imageInput {
+  display: block;
+  margin: 12px auto;
+}
+
+.results {
+  text-align: left;
+  margin-top: 20px;
+  font-size: 0.9rem;
+}
+
+.hidden { display: none; }
