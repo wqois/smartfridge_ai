@@ -2,20 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartFridge AI 🍎</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartFridge AI 🍳</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div class="container glass">
     <h1>SmartFridge AI 🍳</h1>
-    <p class="subtitle">Snap your fridge → get study performance food tips!</p>
+    <p class="subtitle">Snap or upload your fridge to get study food tips</p>
 
-    <input type="file" id="imageInput" accept="image/*" capture="environment">
-    <button id="analyzeBtn" class="glass-btn">Analyze Fridge</button>
+    <div class="upload-box">
+      <input type="file" id="imageInput" accept="image/*" hidden />
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+
+      <div class="button-group">
+        <button id="uploadBtn" class="glass-btn">📁 Upload Photo</button>
+        <button id="cameraBtn" class="glass-btn">📸 Take Photo</button>
+      </div>
+
+      <div id="preview-area"></div>
+      <button id="analyzeBtn" class="glass-btn primary">🔍 Analyze Fridge</button>
+    </div>
 
     <div id="loading" class="hidden">Analyzing...</div>
-
     <div id="results" class="results"></div>
   </div>
 
