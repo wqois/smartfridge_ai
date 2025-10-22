@@ -1,87 +1,61 @@
-import os
-import requests
-from flask import Flask, render_template, request, jsonify
+# app.py
+from transformers import AutoProcessor, AutoModelForCausalLM
+from flask import Flask, request, jsonify
+from PIL import Image
+import torch
+import io
 
 app = Flask(__name__)
 
-# Florence-2 model endpoint
-MODEL_URL = "https://api-inference.huggingface.co/models/microsoft/Florence-2-base-ft"
-# Load your Hugging Face token from environment variable
-HF_TOKEN = os.getenv("HF_TOKEN")  # set this in Render → Environment → Add variable
+# Load model and processor
+MODEL_ID = "microsoft/Florence-2-base"
 
-def analyze_image(image_bytes):
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
-        "Content-Type": "image/jpeg"
-    }
-    try:
-        r = requests.post(MODEL_URL, headers=headers, data=image_bytes, timeout=60)
-        if r.status_code != 200:
-            return None, f"Model error {r.status_code}: {r.text}"
-        return r.json(), None
-    except Exception as e:
-        return None, str(e)
-
-def is_food_object(label):
-    food_keywords = [
-        "food","fruit","apple","banana","orange","bread","burger","pizza","sandwich",
-        "salad","egg","milk","yogurt","chicken","fish","meat","steak","rice","noodle",
-        "cake","ice cream","cookie","vegetable","tomato","potato","onion","carrot"
-    ]
-    return any(word in label.lower() for word in food_keywords)
-
-def get_recommendation(food_list):
-    recs = []
-    for f in food_list:
-        fl = f.lower()
-        if any(x in fl for x in ["banana","berries","apple","fish","egg","nuts","milk","yogurt"]):
-            recs.append(f"✅ {f}: Great for focus and memory.")
-        elif any(x in fl for x in ["pizza","burger","cake","ice cream","fries","soda"]):
-            recs.append(f"⚠️ {f}: Not ideal for studying.")
-        else:
-            recs.append(f"ℹ️ {f}: Neutral for studying.")
-    return recs
+print("Loading Florence-2 model... (this may take a minute)")
+processor = AutoProcessor.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID,
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+print("Model loaded successfully ✅")
 
 @app.route("/")
-def index():
-    return render_template("index.html")
+def home():
+    return jsonify({
+        "message": "Welcome to Smart Fridge AI API 🍎",
+        "usage": "POST an image to /analyze as multipart/form-data with key 'image'"
+    })
 
 @app.route("/analyze", methods=["POST"])
-def analyze():
+def analyze_image():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
-    image_bytes = request.files["image"].read()
-    data, err = analyze_image(image_bytes)
-    if err:
-        return jsonify({"error": err}), 500
+    image_file = request.files["image"]
+    image = Image.open(io.BytesIO(image_file.read())).convert("RGB")
 
-    labels = []
-    if isinstance(data, list):
-        for d in data:
-            if isinstance(d, dict) and "label" in d:
-                labels.append(d["label"])
-    elif isinstance(data, dict):
-        if "objects" in data:
-            labels = [obj.get("label", "") for obj in data["objects"]]
-        elif "generated_text" in data:
-            labels = [data["generated_text"]]
+    # Florence prompt for captioning
+    prompt = "<DETAILED_CAPTION>"
 
-    foods = [l for l in labels if is_food_object(l)]
+    inputs = processor(images=image, text=prompt, return_tensors="pt").to(model.device)
+    generated_ids = model.generate(**inputs, max_new_tokens=256)
+    caption = processor.decode(generated_ids[0], skip_special_tokens=True)
 
-    if not foods:
-        return jsonify({
-            "message": "No food detected.",
-            "predictions": labels,
-            "recommendations": []
-        })
+    # Simple heuristic: detect if there’s food
+    food_keywords = ["food", "fruit", "vegetable", "meat", "bottle", "egg", "bread", "milk", "cheese", "plate", "dish"]
+    has_food = any(word in caption.lower() for word in food_keywords)
 
-    recs = get_recommendation(foods)
+    suggestion = (
+        "🍽️ Eat something light and nutritious to keep focus while studying!"
+        if has_food else
+        "🚫 No recognizable food detected — maybe your fridge is empty?"
+    )
+
     return jsonify({
-        "message": "Food detected successfully!",
-        "predictions": foods,
-        "recommendations": recs
+        "description": caption,
+        "has_food": has_food,
+        "suggestion": suggestion
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=7860)
