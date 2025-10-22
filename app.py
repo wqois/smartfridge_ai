@@ -7,7 +7,7 @@ app = Flask(__name__)
 # ------------------------------------------------------
 # CONFIG
 # ------------------------------------------------------
-MODEL_URL = "https://api-inference.huggingface.co/models/nateraw/food-classifier"
+MODEL_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
 HF_TOKEN = os.environ.get("HF_TOKEN")  # Optional token for stability
 
 # ------------------------------------------------------
