@@ -5,8 +5,7 @@ from flask import Flask, render_template, request, jsonify
 app = Flask(__name__)
 
 # Florence-2 model endpoint
-MODEL_URL = "https://api-inference.huggingface.co/models/microsoft/Florence-2-large"
-
+MODEL_URL = "https://api-inference.huggingface.co/models/microsoft/Florence-2-base-ft"
 # Load your Hugging Face token from environment variable
 HF_TOKEN = os.getenv("HF_TOKEN")  # set this in Render → Environment → Add variable
 
