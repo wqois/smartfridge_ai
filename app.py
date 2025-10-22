@@ -1,13 +1,20 @@
+import os
 import requests
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-# Free open Hugging Face vision model (Microsoft Florence-2)
+# Florence-2 model endpoint
 MODEL_URL = "https://api-inference.huggingface.co/models/microsoft/Florence-2-large"
 
+# Load your Hugging Face token from environment variable
+HF_TOKEN = os.getenv("HF_TOKEN")  # set this in Render → Environment → Add variable
+
 def analyze_image(image_bytes):
-    headers = {"Content-Type": "image/jpeg"}
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "image/jpeg"
+    }
     try:
         r = requests.post(MODEL_URL, headers=headers, data=image_bytes, timeout=60)
         if r.status_code != 200:
@@ -22,8 +29,7 @@ def is_food_object(label):
         "salad","egg","milk","yogurt","chicken","fish","meat","steak","rice","noodle",
         "cake","ice cream","cookie","vegetable","tomato","potato","onion","carrot"
     ]
-    l = label.lower()
-    return any(word in l for word in food_keywords)
+    return any(word in label.lower() for word in food_keywords)
 
 def get_recommendation(food_list):
     recs = []
@@ -45,26 +51,23 @@ def index():
 def analyze():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
-    image_bytes = request.files["image"].read()
 
+    image_bytes = request.files["image"].read()
     data, err = analyze_image(image_bytes)
     if err:
         return jsonify({"error": err}), 500
 
-    # Florence-2 may return either a list of dicts or one dict
     labels = []
     if isinstance(data, list):
         for d in data:
             if isinstance(d, dict) and "label" in d:
                 labels.append(d["label"])
     elif isinstance(data, dict):
-        # sometimes returns {"generated_text": "...", "objects": [{"label": "apple"}]}
         if "objects" in data:
             labels = [obj.get("label", "") for obj in data["objects"]]
         elif "generated_text" in data:
             labels = [data["generated_text"]]
 
-    # Extract foods
     foods = [l for l in labels if is_food_object(l)]
 
     if not foods:
