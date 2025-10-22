@@ -4,74 +4,32 @@ from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-# ------------------------------------------------------
-# CONFIGURATION
-# ------------------------------------------------------
-# Public model on Hugging Face (detects real food classes)
-MODEL_URL = "https://api-inference.huggingface.co/models/valentinafeve/food-image-classification"
-HF_TOKEN = os.environ.get("HF_TOKEN")  # Optional Hugging Face token
+LOGMEAL_TYPE_URL = "https://api.logmeal.com/image/recognition/type/v0.0"
+LOGMEAL_DETECT_URL = "https://api.logmeal.com/v2/recognition/dish"
+API_KEY = os.environ.get("LOGMEAL_KEY")
 
-# ------------------------------------------------------
-# HELPER: send image to Hugging Face
-# ------------------------------------------------------
-def analyze_image(image_bytes):
+def detect_food_type(image_bytes):
     headers = {
-        "Content-Type": "image/jpeg"
+        "Content-Type": "image/jpeg",
+        "Authorization": f"Bearer {API_KEY}"
     }
-    if HF_TOKEN:
-        headers["Authorization"] = f"Bearer {HF_TOKEN}"
-
-    try:
-        response = requests.post(
-            MODEL_URL,
-            headers=headers,
-            data=image_bytes,   # ✅ send raw bytes instead of multipart form
-            timeout=60
-        )
-
-        if response.status_code != 200:
-            return None, f"Model request failed: {response.status_code} - {response.text}"
-
-        return response.json(), None
-
-    except Exception as e:
-        return None, str(e)
+    resp = requests.post(LOGMEAL_TYPE_URL, headers=headers, data=image_bytes)
+    if resp.status_code != 200:
+        return None, f"Food type API error {resp.status_code}: {resp.text}"
+    return resp.json(), None
 
 
-# ------------------------------------------------------
-# HELPER: make recommendations for study performance
-# ------------------------------------------------------
-def get_study_recommendations(predictions):
-    # Basic nutrition-to-academic link mapping
-    study_tips = {
-        "apple": "Apples help stabilize blood sugar for long study sessions.",
-        "banana": "Bananas boost memory and focus — great before exams.",
-        "egg": "Eggs contain choline, which improves brain function.",
-        "fish": "Fish (especially salmon) has omega-3, improving memory.",
-        "nuts": "Nuts support focus and reduce exam stress.",
-        "yogurt": "Yogurt helps mood and concentration through probiotics.",
-        "milk": "Milk contains vitamin B12 for healthy brain function.",
-        "chocolate": "Dark chocolate improves blood flow to the brain.",
-        "bread": "Whole-grain bread provides steady energy for studying.",
-        "coffee": "Coffee boosts alertness — just don’t overdo it!",
-        "tea": "Tea improves calm focus without caffeine crashes."
+def detect_food_items(image_bytes):
+    headers = {
+        "Content-Type": "image/jpeg",
+        "Authorization": f"Bearer {API_KEY}"
     }
-
-    recommendations = []
-    for p in predictions:
-        food_label = p["label"].lower()
-        for key, advice in study_tips.items():
-            if key in food_label:
-                recommendations.append({
-                    "food": key,
-                    "advice": advice
-                })
-    return recommendations
+    resp = requests.post(LOGMEAL_DETECT_URL, headers=headers, data=image_bytes)
+    if resp.status_code != 200:
+        return None, f"Food detect API error {resp.status_code}: {resp.text}"
+    return resp.json(), None
 
 
-# ------------------------------------------------------
-# ROUTES
-# ------------------------------------------------------
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -85,22 +43,48 @@ def analyze():
     image_file = request.files["image"]
     image_bytes = image_file.read()
 
-    result, error = analyze_image(image_bytes)
-    if error:
-        return jsonify({"error": error}), 500
+    # Step 1: detect whether there is food
+    type_data, err = detect_food_type(image_bytes)
+    if err:
+        return jsonify({"error": err}), 500
 
-    # Model returns list of {label, score}
-    predictions = sorted(result, key=lambda x: x["score"], reverse=True)[:5]
-    recommendations = get_study_recommendations(predictions)
+    if type_data.get("type") == "non_food":
+        return jsonify({
+            "message": "No food detected in image.",
+            "predictions": [],
+            "recommendations": []
+        })
+
+    # Step 2: identify food items
+    detect_data, err2 = detect_food_items(image_bytes)
+    if err2:
+        return jsonify({"error": err2}), 500
+
+    items = []
+    for d in detect_data.get("recognition_results", []):
+        if "name" in d:
+            items.append(d["name"])
+
+    if not items:
+        return jsonify({"message": "No recognizable food found."})
+
+    # Step 3: recommendations for study performance
+    recs = []
+    for food in items:
+        f = food.lower()
+        if any(x in f for x in ["banana", "apple", "berries", "nuts", "egg", "fish", "salmon", "milk", "yogurt"]):
+            recs.append(f"✅ {food}: Great for brain energy and memory.")
+        elif any(x in f for x in ["pizza", "burger", "soda", "fries", "cake", "ice cream"]):
+            recs.append(f"⚠️ {food}: Not ideal for studying, may reduce focus.")
+        else:
+            recs.append(f"ℹ️ {food}: Neutral effect on studying.")
 
     return jsonify({
-        "predictions": predictions,
-        "recommendations": recommendations
+        "message": "Food detected successfully!",
+        "predictions": items,
+        "recommendations": recs
     })
 
 
-# ------------------------------------------------------
-# DEPLOYMENT ENTRY POINT
-# ------------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
